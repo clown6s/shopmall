@@ -1,0 +1,43 @@
+# ===========================================
+# ShopMall 配置文件
+# ===========================================
+
+app:
+  port: "7000"
+  mode: dev           # dev | prod | test
+
+db:
+  host: 127.0.0.1
+  port: 3306
+  user: root
+  password: ""
+  dbname: shop_mall
+  max_open_conns: 50
+  max_idle_conns: 25
+  conn_max_life: 3600       # 秒
+  conn_max_idle_time: 600   # 秒
+  tls: ""                   # "" | skip-verify | custom
+
+redis:
+  host: 127.0.0.1
+  port: 6379
+  password: ""
+  db: 0
+  tls: false
+
+cors:
+  allow_origins:
+    - http://localhost:5173
+  allow_methods:
+    - GET
+    - POST
+    - PUT
+    - DELETE
+    - OPTIONS
+  allow_headers:
+    - Origin
+    - Content-Type
+    - Authorization
+    - X-XSRF-TOKEN
+  allow_credentials: true
+  max_age: 86400
