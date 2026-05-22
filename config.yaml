@@ -7,10 +7,10 @@ app:
   mode: dev           # dev | prod | test
 
 db:
-  host: 127.0.0.1
+  host: 10.211.55.5
   port: 3306
   user: root
-  password: ""
+  password: admin@zzp
   dbname: shop_mall
   max_open_conns: 50
   max_idle_conns: 25
@@ -19,9 +19,9 @@ db:
   tls: ""                   # "" | skip-verify | custom
 
 redis:
-  host: 127.0.0.1
+  host: 10.211.55.5
   port: 6379
-  password: ""
+  password: admin@zzp
   db: 0
   tls: false
 

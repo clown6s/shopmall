@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -43,6 +44,7 @@ func main() {
 	default:
 		gin.SetMode(gin.TestMode)
 	}
+	gin.DefaultWriter = io.Discard
 
 	// 4. Wire init
 	app, err := server.InitializeApp(cfg)

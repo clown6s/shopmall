@@ -30,6 +30,6 @@ func RegisterRoutes(r *gin.Engine, hc *HealthChecker) {
 				return
 			}
 		}
-		c.Status(http.StatusOK)
+		c.JSON(http.StatusOK, common.OkData(nil))
 	})
 }
