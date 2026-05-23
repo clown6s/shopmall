@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"shopmall/common"
 	"shopmall/common/middleware"
 	commonutil "shopmall/common/util"
@@ -600,6 +601,9 @@ func (h *EmployeeHandler) ResetPassword(c *gin.Context) {
 // ===================== Cookie 辅助函数 =====================
 
 func isSecureCookie() bool {
+	if v := os.Getenv("COOKIE_SECURE"); v != "" {
+		return strings.EqualFold(v, "true") || v == "1"
+	}
 	return config.Cfg.App.Mode == "prod"
 }
 
