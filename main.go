@@ -79,7 +79,7 @@ func main() {
 
 	// 7. Register routes
 	hc := &routes.HealthChecker{DB: app.DB, Redis: app.Redis}
-	routes.RegisterRoutes(r, hc, app.EmployeeHandler, app.DeptHandler, app.ProductHandler)
+	routes.RegisterRoutes(r, hc, app.EmployeeRepo, app.EmployeeHandler, app.DeptHandler, app.ProductHandler, app.RoleHandler, app.PermHandler)
 
 	// 8. Start HTTP server
 	addr := cfg.App.Port

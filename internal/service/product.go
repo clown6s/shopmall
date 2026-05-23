@@ -118,7 +118,7 @@ func (s *ProductService) AddCategory(ctx context.Context, req *dto.CategoryAddRe
 		return 0, err
 	}
 
-	s.refreshCacheDebounced()
+	s.InitCategoryCache(ctx)
 	return id, nil
 }
 
@@ -135,7 +135,7 @@ func (s *ProductService) EditCategory(ctx context.Context, req *dto.CategoryEdit
 		return err
 	}
 
-	s.refreshCacheDebounced()
+	s.InitCategoryCache(ctx)
 	return nil
 }
 
@@ -145,7 +145,7 @@ func (s *ProductService) DeleteCategory(ctx context.Context, catID int64) (int64
 	if err != nil {
 		return 0, 0, err
 	}
-	s.refreshCacheDebounced()
+	s.InitCategoryCache(ctx)
 	return catRows, brandRows, nil
 }
 

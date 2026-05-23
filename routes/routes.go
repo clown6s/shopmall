@@ -6,6 +6,7 @@ import (
 	"shopmall/common"
 	"shopmall/common/middleware"
 	"shopmall/internal/handler"
+	"shopmall/internal/repository"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -18,7 +19,7 @@ type HealthChecker struct {
 }
 
 // RegisterRoutes registers all routes
-func RegisterRoutes(r *gin.Engine, hc *HealthChecker, empHandler *handler.EmployeeHandler, deptHandler *handler.DepartmentHandler, prodHandler *handler.ProductHandler) {
+func RegisterRoutes(r *gin.Engine, hc *HealthChecker, empRepo *repository.EmployeeRepo, empHandler *handler.EmployeeHandler, deptHandler *handler.DepartmentHandler, prodHandler *handler.ProductHandler, roleHandler *handler.RoleHandler, permHandler *handler.PermissionHandler) {
 	// 健康检查
 	r.GET("/health", func(c *gin.Context) {
 		if hc != nil && hc.DB != nil {
@@ -35,6 +36,8 @@ func RegisterRoutes(r *gin.Engine, hc *HealthChecker, empHandler *handler.Employ
 		}
 		c.JSON(http.StatusOK, common.OkData(nil))
 	})
+
+	requireAdmin := middleware.RequireAdmin(empRepo)
 
 	// API 路由组
 	api := r.Group("/api")
@@ -91,6 +94,33 @@ func RegisterRoutes(r *gin.Engine, hc *HealthChecker, empHandler *handler.Employ
 				product.POST("/brand", prodHandler.AddBrand)
 				product.PUT("/brand/:brandId", prodHandler.UpdateBrand)
 				product.DELETE("/brand/:brandId", prodHandler.DeleteBrand)
+			}
+
+			// ── 管理员专用路由 ──
+			admin := authed.Group("")
+			admin.Use(requireAdmin)
+			{
+				// 角色管理
+				role := admin.Group("/admin/role")
+				{
+					role.GET("", roleHandler.List)
+					role.GET("/:id", roleHandler.GetByID)
+					role.POST("", roleHandler.Create)
+					role.PUT("/:id", roleHandler.Update)
+					role.DELETE("/:id", roleHandler.Delete)
+					role.GET("/:id/permissions", roleHandler.GetPermissionIDs)
+					role.PUT("/:id/permissions", roleHandler.AssignPermissions)
+				}
+
+				// 权限管理
+				perm := admin.Group("/admin/permission")
+				{
+					perm.GET("", permHandler.List)
+					perm.GET("/:id", permHandler.GetByID)
+					perm.POST("", permHandler.Create)
+					perm.PUT("/:id", permHandler.Update)
+					perm.DELETE("/:id", permHandler.Delete)
+				}
 			}
 		}
 	}

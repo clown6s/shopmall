@@ -25,6 +25,9 @@ type App struct {
 	EmployeeHandler *handler.EmployeeHandler
 	DeptHandler     *handler.DepartmentHandler
 	ProductHandler  *handler.ProductHandler
+	RoleHandler     *handler.RoleHandler
+	PermHandler     *handler.PermissionHandler
+	EmployeeRepo    *repository.EmployeeRepo
 }
 
 func newApp(
@@ -34,6 +37,9 @@ func newApp(
 	empHandler *handler.EmployeeHandler,
 	deptHandler *handler.DepartmentHandler,
 	prodHandler *handler.ProductHandler,
+	roleHandler *handler.RoleHandler,
+	permHandler *handler.PermissionHandler,
+	empRepo *repository.EmployeeRepo,
 ) *App {
 	return &App{
 		DB:              db,
@@ -42,6 +48,9 @@ func newApp(
 		EmployeeHandler: empHandler,
 		DeptHandler:     deptHandler,
 		ProductHandler:  prodHandler,
+		RoleHandler:     roleHandler,
+		PermHandler:     permHandler,
+		EmployeeRepo:    empRepo,
 	}
 }
 
@@ -59,17 +68,22 @@ func InitializeApp(cfg *config.Config) (*App, error) {
 	employeeRepo := repository.NewEmployeeRepo(dbConn)
 	departmentRepo := repository.NewDepartmentRepo(dbConn)
 	productRepo := repository.NewProductRepo(dbConn)
+	roleRepo := repository.NewRoleRepo(dbConn)
+	permissionRepo := repository.NewPermissionRepo(dbConn)
 
 	employeeService := service.NewEmployeeSvc(employeeRepo, redisClient)
-	roleService := service.NewRoleSvc()
+	roleService := service.NewRoleSvc(roleRepo, permissionRepo)
 	departmentService := service.NewDepartmentSvc(departmentRepo)
 	productService := service.NewProductSvc(productRepo)
+	permissionService := service.NewPermissionService(permissionRepo)
 
 	loginRateLimiter := middleware.NewLoginRateLimiter()
 
 	employeeHandler := handler.NewEmployeeHandler(employeeService, roleService, loginRateLimiter, redisClient)
 	departmentHandler := handler.NewDepartmentHandler(departmentService)
 	productHandler := handler.NewProductHandler(productService)
+	roleHandler := handler.NewRoleHandler(roleService)
+	permissionHandler := handler.NewPermissionHandler(permissionService)
 
-	return newApp(dbConn, redisClient, cfg, employeeHandler, departmentHandler, productHandler), nil
+	return newApp(dbConn, redisClient, cfg, employeeHandler, departmentHandler, productHandler, roleHandler, permissionHandler, employeeRepo), nil
 }

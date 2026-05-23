@@ -26,6 +26,9 @@ type App struct {
 	EmployeeHandler *handler.EmployeeHandler
 	DeptHandler     *handler.DepartmentHandler
 	ProductHandler  *handler.ProductHandler
+	RoleHandler     *handler.RoleHandler
+	PermHandler     *handler.PermissionHandler
+	EmployeeRepo    *repository.EmployeeRepo
 }
 
 func newApp(
@@ -35,6 +38,9 @@ func newApp(
 	empHandler *handler.EmployeeHandler,
 	deptHandler *handler.DepartmentHandler,
 	prodHandler *handler.ProductHandler,
+	roleHandler *handler.RoleHandler,
+	permHandler *handler.PermissionHandler,
+	empRepo *repository.EmployeeRepo,
 ) *App {
 	return &App{
 		DB:              db,
@@ -43,6 +49,9 @@ func newApp(
 		EmployeeHandler: empHandler,
 		DeptHandler:     deptHandler,
 		ProductHandler:  prodHandler,
+		RoleHandler:     roleHandler,
+		PermHandler:     permHandler,
+		EmployeeRepo:    empRepo,
 	}
 }
 
@@ -56,12 +65,15 @@ var wireSet = wire.NewSet(
 	repository.NewEmployeeRepo,
 	repository.NewDepartmentRepo,
 	repository.NewProductRepo,
+	repository.NewRoleRepo,
+	repository.NewPermissionRepo,
 
 	// Service 层
 	service.NewEmployeeSvc,
 	service.NewRoleSvc,
 	service.NewDepartmentSvc,
 	service.NewProductSvc,
+	service.NewPermissionService,
 
 	// Middleware
 	middleware.NewLoginRateLimiter,
@@ -70,6 +82,8 @@ var wireSet = wire.NewSet(
 	handler.NewEmployeeHandler,
 	handler.NewDepartmentHandler,
 	handler.NewProductHandler,
+	handler.NewRoleHandler,
+	handler.NewPermissionHandler,
 
 	// App 组装
 	newApp,

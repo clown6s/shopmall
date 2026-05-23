@@ -86,3 +86,31 @@ type SysLoginLog struct {
 func (SysLoginLog) TableName() string {
 	return "sys_login_log"
 }
+
+// PermissionType 权限类型
+type PermissionType int8
+
+const (
+	PermissionTypeMenu   PermissionType = 1 // 菜单
+	PermissionTypeButton PermissionType = 2 // 按钮
+	PermissionTypeAPI    PermissionType = 3 // API
+)
+
+// SysPermission 权限表
+type SysPermission struct {
+	ID             int64          `json:"id"`
+	PermissionName string         `json:"permissionName"`
+	PermissionKey  string         `json:"permissionKey"`
+	Type           PermissionType `json:"type"`     // 1=菜单 2=按钮 3=API
+	ParentID       int64          `json:"parentId"` // 0=顶级
+	Path           string         `json:"path"`     // 菜单路由（按钮/API为空）
+	Method         string         `json:"method"`   // HTTP 方法（API权限）
+	SortOrder      int            `json:"sortOrder"`
+	Status         int8           `json:"status"` // 1=启用 0=禁用
+	CreatedAt      time.Time      `json:"createdAt"`
+	UpdatedAt      time.Time      `json:"updatedAt"`
+}
+
+func (SysPermission) TableName() string {
+	return "sys_permission"
+}
