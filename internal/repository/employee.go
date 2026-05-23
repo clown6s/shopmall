@@ -76,7 +76,7 @@ func (r *EmployeeRepo) InsertEmployee(ctx context.Context, emp *model.SysEmploye
 	return nil
 }
 
-// UpdateEmployee 更新员工信息
+// UpdateEmployee 更新员工信息（全字段）
 func (r *EmployeeRepo) UpdateEmployee(ctx context.Context, emp *model.SysEmployee) error {
 	const query = `UPDATE sys_employee SET
 		real_name = ?, avatar = ?, gender = ?, age = ?, phone = ?, email = ?,
@@ -91,6 +91,31 @@ func (r *EmployeeRepo) UpdateEmployee(ctx context.Context, emp *model.SysEmploye
 	)
 	if err != nil {
 		return fmt.Errorf("update employee failed: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected check failed: %w", err)
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// UpdateProfile 更新员工个人信息（仅安全字段，不含 role/department/position/work_status/can_login）
+func (r *EmployeeRepo) UpdateProfile(ctx context.Context, emp *model.SysEmployee) error {
+	const query = `UPDATE sys_employee SET
+		real_name = ?, avatar = ?, gender = ?, age = ?, phone = ?, email = ?,
+		remark = ?
+		WHERE employee_id = ? AND deleted_at IS NULL`
+
+	result, err := r.db.ExecContext(ctx, query,
+		emp.RealName, emp.Avatar, emp.Gender, emp.Age,
+		emp.Phone, emp.Email, emp.Remark, emp.EmployeeID,
+	)
+	if err != nil {
+		return fmt.Errorf("update profile failed: %w", err)
 	}
 
 	rows, err := result.RowsAffected()
@@ -150,7 +175,13 @@ func (r *EmployeeRepo) ListEmployee(ctx context.Context, realName, phone string,
 		return nil, 0, fmt.Errorf("count employees failed: %w", err)
 	}
 
-	// 计算偏移量
+	// 计算偏移量（限制 page 最小值为 1）
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 10
+	}
 	offset := (page - 1) * pageSize
 
 	// 查询列表
@@ -181,6 +212,13 @@ func (r *EmployeeRepo) ListEmployee(ctx context.Context, realName, phone string,
 	}
 
 	return list, total, nil
+}
+
+// CountByRole 统计指定角色下的员工数量（排除已逻辑删除的）
+func (r *EmployeeRepo) CountByRole(ctx context.Context, role string) (int64, error) {
+	var count int64
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sys_employee WHERE role = ? AND deleted_at IS NULL", role).Scan(&count)
+	return count, err
 }
 
 // InsertLoginLog 插入登录日志

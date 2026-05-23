@@ -2,7 +2,9 @@ package middleware
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
+	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -10,15 +12,14 @@ import (
 
 // SetCSRFCookie 生成 CSRF token 并设置为非 httpOnly Cookie（供前端 JS 读取）。
 // token 通过 cookie 下发，前端在 POST/PUT/DELETE 请求时通过 X-XSRF-TOKEN header 带回。
-// ctx 参数保留兼容签名，当前未使用。
-func SetCSRFCookie(_ interface{}, c *gin.Context, _ string) {
+func SetCSRFCookie(c *gin.Context) {
 	token := generateCSRFToken()
 	secure := false
 	if strings.EqualFold(c.Request.Header.Get("X-Forwarded-Proto"), "https") {
 		secure = true
 	}
 	// SameSite=Lax：允许 GET 导航携带，阻止跨站 POST 携带
-	c.SetSameSite(3)                                                // http.SameSiteLax
+	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("xsrf-token", token, 86400, "/", "", secure, false) // httpOnly=false
 }
 
@@ -40,7 +41,7 @@ func ValidateCSRF() gin.HandlerFunc {
 		}
 
 		headerToken := c.GetHeader("X-XSRF-TOKEN")
-		if headerToken == "" || !strings.EqualFold(headerToken, cookieToken) {
+		if headerToken == "" || subtle.ConstantTimeCompare([]byte(headerToken), []byte(cookieToken)) != 1 {
 			c.JSON(403, gin.H{"code": 403, "message": "CSRF token 不匹配"})
 			c.Abort()
 			return

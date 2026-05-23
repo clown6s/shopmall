@@ -103,12 +103,27 @@ func (r *ProductRepo) EditCategory(ctx context.Context, catID int64, name string
 
 // DeleteCategory 逻辑删除分类（包括所有子分类和关联品牌）
 func (r *ProductRepo) DeleteCategory(ctx context.Context, catID int64) (int64, int64, error) {
+	// 开启事务（BFS 读取在事务内，避免 TOCTOU 竞态）
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, 0, err
+	}
+	committed := false
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			panic(r)
+		} else if !committed {
+			tx.Rollback()
+		}
+	}()
+
 	type node struct {
 		ID       int64
 		ParentID int64
 	}
 
-	rows, err := r.db.QueryContext(ctx,
+	rows, err := tx.QueryContext(ctx,
 		`SELECT cat_id, parent_cid FROM category WHERE deleted_at IS NULL`)
 	if err != nil {
 		return 0, 0, err
@@ -127,35 +142,31 @@ func (r *ProductRepo) DeleteCategory(ctx context.Context, catID int64) (int64, i
 		return 0, 0, err
 	}
 
-	// BFS 找所有子节点
+	// BFS 找所有子节点（带环检测和深度限制）
 	var ids []int64
+	visited := make(map[int64]bool)
 	queue := []int64{catID}
-	for len(queue) > 0 {
-		id := queue[0]
-		queue = queue[1:]
-		ids = append(ids, id)
-		for _, child := range childrenMap[id] {
-			queue = append(queue, child)
+	maxDepth := 10
+	for len(queue) > 0 && maxDepth > 0 {
+		maxDepth--
+		var next []int64
+		for _, id := range queue {
+			if visited[id] {
+				continue
+			}
+			visited[id] = true
+			ids = append(ids, id)
+			for _, child := range childrenMap[id] {
+				if !visited[child] {
+					next = append(next, child)
+				}
+			}
 		}
+		queue = next
 	}
 	if len(ids) == 0 {
 		return 0, 0, ErrNotFound
 	}
-
-	// 事务删除
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return 0, 0, err
-	}
-	committed := false
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-			panic(r)
-		} else if !committed {
-			tx.Rollback()
-		}
-	}()
 
 	args := make([]interface{}, len(ids))
 	for i, id := range ids {
@@ -174,8 +185,8 @@ func (r *ProductRepo) DeleteCategory(ctx context.Context, catID int64) (int64, i
 		return 0, 0, fmt.Errorf("获取影响行数失败: %w", err)
 	}
 
-	// 删除品牌
-	brandSQL := "UPDATE brand SET deleted_at = NOW() WHERE cat_id IN (" + placeholders + ") AND deleted_at IS NULL"
+	// 删除品牌（物理删除，brand 表无 deleted_at 列）
+	brandSQL := "DELETE FROM brand WHERE cat_id IN (" + placeholders + ")"
 	res2, err := tx.ExecContext(ctx, brandSQL, args...)
 	if err != nil {
 		return 0, 0, err
@@ -286,6 +297,7 @@ func (r *ProductRepo) UpdateBrand(ctx context.Context, brandID int64, brand *mod
 		setParts = append(setParts, "first_letter = ?")
 		args = append(args, brand.FirstLetter)
 	}
+	// TODO: Brand.Sort uses int, can't distinguish "unset" from "set to 0". Consider using *int.
 	if brand.Sort > 0 {
 		setParts = append(setParts, "sort = ?")
 		args = append(args, brand.Sort)
@@ -317,9 +329,9 @@ func (r *ProductRepo) UpdateBrand(ctx context.Context, brandID int64, brand *mod
 	return nil
 }
 
-// DeleteBrand 删除品牌（逻辑删除）
+// DeleteBrand 删除品牌（物理删除，brand 表无 deleted_at 列）
 func (r *ProductRepo) DeleteBrand(ctx context.Context, brandID int64) error {
-	query := `UPDATE brand SET deleted_at = NOW() WHERE brand_id = ? AND deleted_at IS NULL`
+	query := `DELETE FROM brand WHERE brand_id = ?`
 	result, err := r.db.ExecContext(ctx, query, brandID)
 	if err != nil {
 		pkg.Logger.Error("删除品牌失败：", zap.Error(err))
@@ -333,4 +345,11 @@ func (r *ProductRepo) DeleteBrand(ctx context.Context, brandID int64) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// CategoryExists 检查分类是否存在
+func (r *ProductRepo) CategoryExists(ctx context.Context, catID int64) (bool, error) {
+	var count int64
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM category WHERE cat_id = ? AND deleted_at IS NULL", catID).Scan(&count)
+	return count > 0, err
 }

@@ -31,11 +31,24 @@ func (s *PermissionService) GetAllPermissions(ctx context.Context) ([]*model.Sys
 
 // GetPermission 获取单个权限
 func (s *PermissionService) GetPermission(ctx context.Context, id int64) (*model.SysPermission, error) {
-	return s.repo.GetByID(ctx, id)
+	perm, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrPermissionNotFound
+		}
+		return nil, fmt.Errorf("查询权限失败: %w", err)
+	}
+	return perm, nil
 }
 
 // CreatePermission 创建权限
 func (s *PermissionService) CreatePermission(ctx context.Context, req *dto.PermissionCreateReq) (*model.SysPermission, error) {
+	// 校验 PermissionKey 唯一性
+	existing, err := s.repo.GetByKey(ctx, req.PermissionKey)
+	if err == nil && existing != nil {
+		return nil, errors.New("权限标识已存在")
+	}
+
 	perm := &model.SysPermission{
 		PermissionName: req.PermissionName,
 		PermissionKey:  req.PermissionKey,
@@ -60,6 +73,13 @@ func (s *PermissionService) UpdatePermission(ctx context.Context, id int64, req 
 			return ErrPermissionNotFound
 		}
 		return fmt.Errorf("查询权限失败: %w", err)
+	}
+	if req.PermissionKey != nil && *req.PermissionKey != perm.PermissionKey {
+		// 校验新 PermissionKey 唯一性
+		existing, err := s.repo.GetByKey(ctx, *req.PermissionKey)
+		if err == nil && existing != nil && existing.ID != id {
+			return errors.New("权限标识已存在")
+		}
 	}
 	if req.PermissionName != nil {
 		perm.PermissionName = *req.PermissionName
@@ -90,5 +110,13 @@ func (s *PermissionService) UpdatePermission(ctx context.Context, id int64, req 
 
 // DeletePermission 删除权限（同时清理角色-权限关联）
 func (s *PermissionService) DeletePermission(ctx context.Context, id int64) error {
+	// 检查是否存在子权限
+	hasChildren, err := s.repo.HasChildPermissions(ctx, id)
+	if err != nil {
+		return fmt.Errorf("检查子权限失败: %w", err)
+	}
+	if hasChildren {
+		return errors.New("该权限下存在子权限，请先删除子权限")
+	}
 	return s.repo.DeleteWithRoleRefs(ctx, id)
 }

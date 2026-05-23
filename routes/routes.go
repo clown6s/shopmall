@@ -51,13 +51,14 @@ func RegisterRoutes(r *gin.Engine, hc *HealthChecker, empRepo *repository.Employ
 
 		auth := api.Group("/auth")
 		{
-			auth.POST("/refresh", empHandler.RefreshAccessToken)
-			auth.POST("/logout", empHandler.Logout)
+			auth.POST("/refresh", middleware.ValidateCSRF(), empHandler.RefreshAccessToken)
+			auth.POST("/logout", middleware.ValidateCSRF(), empHandler.Logout)
 		}
 
 		// ── 需要认证的路由 ──
 		authed := api.Group("")
-		authed.Use(middleware.AuthMiddleware())
+		authed.Use(middleware.AuthMiddleware(hc.Redis))
+		authed.Use(middleware.ValidateCSRF())
 		{
 			// ── 当前用户（白名单，不需要额外权限） ──
 			user := authed.Group("/user")

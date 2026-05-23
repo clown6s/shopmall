@@ -90,20 +90,6 @@ func (r *RoleRepo) Update(ctx context.Context, role *model.SysRole) error {
 	return nil
 }
 
-// Delete 删除角色
-func (r *RoleRepo) Delete(ctx context.Context, id int64) error {
-	query := `DELETE FROM sys_role WHERE id = ?`
-	result, err := r.db.ExecContext(ctx, query, id)
-	if err != nil {
-		return err
-	}
-	rows, _ := result.RowsAffected()
-	if rows == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
-}
-
 // GetByRoleKey 根据角色标识获取角色
 func (r *RoleRepo) GetByRoleKey(ctx context.Context, roleKey string) (*model.SysRole, error) {
 	query := `SELECT id, role_name, role_key, description, status, created_at, updated_at

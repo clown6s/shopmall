@@ -75,6 +75,7 @@ func main() {
 		middleware.SecurityHeadersMiddleware(),
 		middleware.CORSMiddleware(middleware.NewCORSOptions(&cfg.CORS)),
 		middleware.RecoveryMiddleware(),
+		middleware.BodyLimitMiddleware(10<<20), // 10MB
 	)
 
 	// 7. Register routes

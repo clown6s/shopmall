@@ -10,3 +10,5 @@
 *.out
 vendor/
 tmp/
+config.yaml
+config*.yaml

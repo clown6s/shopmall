@@ -318,6 +318,10 @@ func (s *EmployeeService) CreateEmployee(ctx context.Context, req *dto.CreateEmp
 		return nil, errors.New("手机号格式不正确")
 	}
 
+	if req.Age != nil && (*req.Age < 0 || *req.Age > 150) {
+		return nil, errors.New("年龄必须在0-150之间")
+	}
+
 	if existing, dupErr := s.employeeRepo.GetByPhone(ctx, req.Phone); dupErr == nil && existing != nil {
 		return nil, fmt.Errorf("手机号 %s 已被使用", req.Phone)
 	}
@@ -450,6 +454,9 @@ func (s *EmployeeService) UpdateEmployee(ctx context.Context, id int64, req *dto
 	}
 	existing.Gender = req.Gender
 	if req.Age != nil {
+		if *req.Age < 0 || *req.Age > 150 {
+			return errors.New("年龄必须在0-150之间")
+		}
 		existing.Age = req.Age
 	}
 	if req.Email != "" {
@@ -461,7 +468,7 @@ func (s *EmployeeService) UpdateEmployee(ctx context.Context, id int64, req *dto
 	// P1: 以下敏感字段不允许普通用户自行修改
 	// department, position, work_status, can_login 应由管理员接口修改
 
-	return s.employeeRepo.UpdateEmployee(ctx, existing)
+	return s.employeeRepo.UpdateProfile(ctx, existing)
 }
 
 // GetEmployeeByID 根据 ID 获取员工信息（不含密码，用于 /user/me）

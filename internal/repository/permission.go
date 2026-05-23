@@ -3,7 +3,9 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"shopmall/internal/model"
+	"strings"
 )
 
 // PermissionRepo 权限数据访问层
@@ -142,6 +144,34 @@ func (r *PermissionRepo) GetButtonPermissionKeysByRoleID(ctx context.Context, ro
 	return keys, nil
 }
 
+// GetByKey 根据权限标识查询权限
+func (r *PermissionRepo) GetByKey(ctx context.Context, key string) (*model.SysPermission, error) {
+	query := `SELECT id, permission_name, permission_key, type, parent_id, path, method, sort_order, status, created_at, updated_at
+		FROM sys_permission WHERE permission_key = ?`
+	row := r.db.QueryRowContext(ctx, query, key)
+	var perm model.SysPermission
+	err := row.Scan(&perm.ID, &perm.PermissionName, &perm.PermissionKey, &perm.Type,
+		&perm.ParentID, &perm.Path, &perm.Method, &perm.SortOrder,
+		&perm.Status, &perm.CreatedAt, &perm.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &perm, nil
+}
+
+// HasChildPermissions 检查指定权限是否存在子权限
+func (r *PermissionRepo) HasChildPermissions(ctx context.Context, parentID int64) (bool, error) {
+	var count int64
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sys_permission WHERE parent_id = ?`, parentID).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 // Update 更新权限
 func (r *PermissionRepo) Update(ctx context.Context, perm *model.SysPermission) error {
 	query := `UPDATE sys_permission SET permission_name = ?, permission_key = ?, type = ?,
@@ -149,19 +179,6 @@ func (r *PermissionRepo) Update(ctx context.Context, perm *model.SysPermission) 
 	result, err := r.db.ExecContext(ctx, query,
 		perm.PermissionName, perm.PermissionKey, perm.Type, perm.ParentID,
 		perm.Path, perm.Method, perm.SortOrder, perm.Status, perm.ID)
-	if err != nil {
-		return err
-	}
-	rows, _ := result.RowsAffected()
-	if rows == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
-}
-
-// Delete 删除权限
-func (r *PermissionRepo) Delete(ctx context.Context, id int64) error {
-	result, err := r.db.ExecContext(ctx, `DELETE FROM sys_permission WHERE id = ?`, id)
 	if err != nil {
 		return err
 	}
@@ -187,4 +204,21 @@ func (r *PermissionRepo) DeleteWithRoleRefs(ctx context.Context, id int64) error
 		return err
 	}
 	return tx.Commit()
+}
+
+// CountByIDs 统计指定ID列表中存在的权限数量
+func (r *PermissionRepo) CountByIDs(ctx context.Context, ids []int64) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	query := "SELECT COUNT(*) FROM sys_permission WHERE id IN (" + strings.Join(placeholders, ", ") + ")"
+	var count int64
+	err := r.db.QueryRowContext(ctx, query, args...).Scan(&count)
+	return count, err
 }

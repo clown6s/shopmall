@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"shopmall/internal/dto"
 	"shopmall/internal/model"
@@ -100,6 +101,16 @@ func (s *ProductService) AddCategory(ctx context.Context, req *dto.CategoryAddRe
 	}
 	if req.CatLevel <= 0 || req.CatLevel > 3 {
 		return 0, ErrInvalidParam
+	}
+
+	if req.ParentCid != 0 {
+		exists, err := s.productRepo.CategoryExists(ctx, req.ParentCid)
+		if err != nil {
+			return 0, fmt.Errorf("查询父分类失败: %w", err)
+		}
+		if !exists {
+			return 0, errors.New("父分类不存在")
+		}
 	}
 
 	cat := &model.Category{

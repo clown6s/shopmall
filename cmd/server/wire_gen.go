@@ -78,12 +78,12 @@ func InitializeApp(cfg *config.Config) (*App, error) {
 	permissionRepo := repository.NewPermissionRepo(dbConn)
 
 	employeeService := service.NewEmployeeSvc(employeeRepo, redisClient)
-	roleService := service.NewRoleSvc(roleRepo, permissionRepo)
+	roleService := service.NewRoleSvc(roleRepo, permissionRepo, employeeRepo)
 	departmentService := service.NewDepartmentSvc(departmentRepo)
 	productService := service.NewProductSvc(productRepo)
 	permissionService := service.NewPermissionService(permissionRepo)
 
-	loginRateLimiter := middleware.NewLoginRateLimiter()
+	loginRateLimiter := middleware.NewLoginRateLimiter(redisClient)
 
 	employeeHandler := handler.NewEmployeeHandler(employeeService, roleService, loginRateLimiter, redisClient)
 	departmentHandler := handler.NewDepartmentHandler(departmentService)

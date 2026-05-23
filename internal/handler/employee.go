@@ -123,7 +123,7 @@ func (h *EmployeeHandler) Login(c *gin.Context) {
 	}
 
 	// 设置 CSRF Cookie
-	middleware.SetCSRFCookie(nil, c, token)
+	middleware.SetCSRFCookie(c)
 
 	common.WriteJSON(c, http.StatusOK, common.OkData(resp))
 }
@@ -193,7 +193,8 @@ func (h *EmployeeHandler) RefreshAccessToken(c *gin.Context) {
 	// 解析 refresh token 获取 employeeID
 	employeeID, iatFloat, err := parseRefreshToken(refreshTokenStr)
 	if err != nil {
-		common.WriteJSON(c, http.StatusUnauthorized, common.Fail(401, err.Error()))
+		pkg.Logger.Warn("[Refresh] parseRefreshToken failed", zap.Error(err))
+		common.WriteJSON(c, http.StatusUnauthorized, common.Fail(401, "refresh token 无效或已过期"))
 		return
 	}
 
@@ -250,7 +251,7 @@ func (h *EmployeeHandler) RefreshAccessToken(c *gin.Context) {
 	if newRefreshToken != "" {
 		setRefreshCookie(c, newRefreshToken)
 	}
-	middleware.SetCSRFCookie(nil, c, accessToken)
+	middleware.SetCSRFCookie(c)
 
 	common.WriteJSON(c, http.StatusOK, common.OkData(map[string]string{"message": "token refreshed"}))
 }
@@ -271,6 +272,10 @@ func (h *EmployeeHandler) List(c *gin.Context) {
 
 	realName := c.Query("realName")
 	phone := c.Query("phone")
+	if len(phone) > 20 {
+		common.WriteJSON(c, http.StatusBadRequest, common.Fail(400, "手机号搜索长度不能超过20个字符"))
+		return
+	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
 	if pageSize > model.MaxPageSize {
@@ -553,6 +558,17 @@ func (h *EmployeeHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 
+	// 禁止重置 super_admin 的密码
+	targetEmp, err := h.EmployeeService.GetEmployeeByID(c.Request.Context(), empID)
+	if err != nil || targetEmp == nil {
+		common.WriteJSON(c, http.StatusNotFound, common.Fail(404, "目标员工不存在"))
+		return
+	}
+	if targetEmp.Role == "super_admin" {
+		common.WriteJSON(c, http.StatusForbidden, common.Fail(403, "无权重置超级管理员密码"))
+		return
+	}
+
 	var req dto.ResetPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		common.WriteJSON(c, http.StatusBadRequest, common.Fail(400, "请求参数错误"))
@@ -561,6 +577,11 @@ func (h *EmployeeHandler) ResetPassword(c *gin.Context) {
 
 	if req.NewPassword == "" {
 		common.WriteJSON(c, http.StatusBadRequest, common.Fail(400, "新密码不能为空"))
+		return
+	}
+
+	if len(req.NewPassword) < model.PasswordMinLen || len(req.NewPassword) > model.PasswordMaxLen {
+		common.WriteJSON(c, http.StatusBadRequest, common.Fail(400, fmt.Sprintf("密码长度必须在%d-%d位之间", model.PasswordMinLen, model.PasswordMaxLen)))
 		return
 	}
 
@@ -584,6 +605,7 @@ func setAuthCookie(c *gin.Context, token string) {
 	if expireHours <= 0 {
 		expireHours = 2
 	}
+	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("auth_token", token, expireHours*3600, "/", "", isSecureCookie(), true)
 }
 
@@ -592,18 +614,22 @@ func setRefreshCookie(c *gin.Context, token string) {
 	if expireHours <= 0 {
 		expireHours = 168
 	}
+	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("refresh_token", token, expireHours*3600, "/api/auth", "", isSecureCookie(), true)
 }
 
 func clearAuthCookie(c *gin.Context) {
+	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("auth_token", "", -1, "/", "", isSecureCookie(), true)
 }
 
 func clearRefreshCookie(c *gin.Context) {
+	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("refresh_token", "", -1, "/api/auth", "", isSecureCookie(), true)
 }
 
 func clearCSRFCookie(c *gin.Context) {
+	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("xsrf-token", "", -1, "/", "", isSecureCookie(), false)
 }
 

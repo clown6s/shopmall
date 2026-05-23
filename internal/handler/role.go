@@ -167,7 +167,26 @@ func (h *RoleHandler) Delete(c *gin.Context) {
 		return
 	}
 
+	// 检查是否为系统内置角色，禁止删除
+	role, err := h.roleSvc.GetRole(c.Request.Context(), id)
+	if err != nil {
+		if errors.Is(err, service.ErrRoleNotFound) {
+			c.JSON(http.StatusNotFound, common.Fail(404, "角色不存在"))
+			return
+		}
+		c.JSON(http.StatusInternalServerError, common.Fail(500, "查询失败"))
+		return
+	}
+	if role.RoleKey == "super_admin" || role.RoleKey == "admin" {
+		c.JSON(http.StatusBadRequest, common.Fail(400, "系统内置角色不允许删除"))
+		return
+	}
+
 	if err := h.roleSvc.DeleteRole(c.Request.Context(), id); err != nil {
+		if strings.Contains(err.Error(), "关联员工") {
+			c.JSON(http.StatusBadRequest, common.Fail(400, err.Error()))
+			return
+		}
 		c.JSON(http.StatusInternalServerError, common.Fail(500, "删除失败"))
 		return
 	}

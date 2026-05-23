@@ -81,6 +81,10 @@ func (h *ProductHandler) CategoryAdd(c *gin.Context) {
 		common.WriteJSON(c, http.StatusBadRequest, common.Fail(400, "显示状态值无效"))
 		return
 	}
+	if len(req.Icon) > 500 {
+		common.WriteJSON(c, http.StatusBadRequest, common.Fail(400, "分类图标长度不能超过500个字符"))
+		return
+	}
 
 	id, err := h.ProductService.AddCategory(ctx, &req)
 	if err != nil {
@@ -225,6 +229,10 @@ func (h *ProductHandler) AddBrand(c *gin.Context) {
 		common.WriteJSON(c, http.StatusBadRequest, common.Fail(400, "品牌Logo长度不能超过500个字符"))
 		return
 	}
+	if req.CatId <= 0 {
+		common.WriteJSON(c, http.StatusBadRequest, common.Fail(400, "关联分类ID无效"))
+		return
+	}
 
 	brand := &model.Brand{
 		CatId:       req.CatId,
@@ -301,7 +309,7 @@ func (h *ProductHandler) UpdateBrand(c *gin.Context) {
 	common.WriteJSON(c, http.StatusOK, common.OkData(nil))
 }
 
-// DeleteBrand 删除品牌（逻辑删除）
+// DeleteBrand 删除品牌（物理删除）
 // DELETE /api/product/brand/:brandId
 func (h *ProductHandler) DeleteBrand(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 8*time.Second)

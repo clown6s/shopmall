@@ -9,6 +9,7 @@ import (
 	"shopmall/internal/service"
 	"shopmall/pkg"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -101,9 +102,21 @@ func (h *PermissionHandler) Create(c *gin.Context) {
 			return
 		}
 	}
+	if req.Type != 1 && req.Type != 2 && req.Type != 3 {
+		c.JSON(http.StatusBadRequest, common.Fail(400, "权限类型无效，应为1(菜单)、2(按钮)或3(API)"))
+		return
+	}
+	if req.SortOrder < 0 || req.SortOrder > 9999 {
+		c.JSON(http.StatusBadRequest, common.Fail(400, "排序值必须在0-9999之间"))
+		return
+	}
 
 	perm, err := h.permSvc.CreatePermission(c.Request.Context(), &req)
 	if err != nil {
+		if strings.Contains(err.Error(), "已存在") {
+			c.JSON(http.StatusConflict, common.Fail(409, err.Error()))
+			return
+		}
 		pkg.Logger.Error("CreatePermission failed", zap.Error(err))
 		c.JSON(http.StatusBadRequest, common.Fail(400, "创建权限失败"))
 		return
@@ -158,10 +171,22 @@ func (h *PermissionHandler) Update(c *gin.Context) {
 			return
 		}
 	}
+	if req.Type != nil && (*req.Type != 1 && *req.Type != 2 && *req.Type != 3) {
+		c.JSON(http.StatusBadRequest, common.Fail(400, "权限类型无效，应为1(菜单)、2(按钮)或3(API)"))
+		return
+	}
+	if req.SortOrder != nil && (*req.SortOrder < 0 || *req.SortOrder > 9999) {
+		c.JSON(http.StatusBadRequest, common.Fail(400, "排序值必须在0-9999之间"))
+		return
+	}
 
 	if err := h.permSvc.UpdatePermission(c.Request.Context(), id, &req); err != nil {
 		if errors.Is(err, service.ErrPermissionNotFound) {
 			c.JSON(http.StatusNotFound, common.Fail(404, "权限不存在"))
+			return
+		}
+		if strings.Contains(err.Error(), "已存在") {
+			c.JSON(http.StatusConflict, common.Fail(409, err.Error()))
 			return
 		}
 		pkg.Logger.Error("UpdatePermission failed", zap.Error(err))
@@ -181,6 +206,10 @@ func (h *PermissionHandler) Delete(c *gin.Context) {
 	}
 
 	if err := h.permSvc.DeletePermission(c.Request.Context(), id); err != nil {
+		if strings.Contains(err.Error(), "子权限") {
+			c.JSON(http.StatusBadRequest, common.Fail(400, err.Error()))
+			return
+		}
 		c.JSON(http.StatusInternalServerError, common.Fail(500, "删除失败"))
 		return
 	}
