@@ -32,4 +32,5 @@ ENV TZ=Asia/Shanghai
 
 EXPOSE 7000
 
-ENTRYPOINT ["./shopmall"]
+# 等待 MySQL/Redis 就绪后启动，最多重试 30 次（间隔 2s = 60s）
+ENTRYPOINT ["sh", "-c", "for i in $(seq 1 30); do ./shopmall && exit 0; echo \"[$(date +%T)] waiting for db/redis, retry $i/30...\"; sleep 2; done; echo 'max retries reached'; exit 1"]
