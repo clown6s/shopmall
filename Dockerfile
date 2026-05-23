@@ -6,6 +6,7 @@ RUN apk add --no-cache git ca-certificates tzdata
 WORKDIR /build
 
 # 利用 Docker 缓存层：依赖不变时不重新下载
+ENV GOPROXY=https://goproxy.cn,direct
 COPY go.mod go.sum ./
 RUN go mod download
 
@@ -16,18 +17,15 @@ RUN CGO_ENABLED=0 GOOS=linux \
     go build -ldflags="-s -w -extldflags '-static'" -o /shopmall .
 
 # ── 运行阶段 ──
-FROM scratch
+FROM alpine:3.19
 
-# CA 证书（HTTPS 请求必需）+ 时区数据
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+RUN apk add --no-cache wget ca-certificates tzdata
 
 # 非 root 用户运行
 USER nobody
 
 WORKDIR /app
 COPY --from=builder /shopmall .
-COPY --from=builder /build/config.yaml .
 
 ENV TZ=Asia/Shanghai
 
