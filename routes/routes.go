@@ -48,6 +48,10 @@ func RegisterRoutes(r *gin.Engine, hc *HealthChecker, empRepo *repository.Employ
 	{
 		// ── 不需要认证的路由 ──
 		api.POST("/employee/login", empHandler.Login)
+		api.GET("/csrf/token", func(c *gin.Context) {
+			middleware.SetCSRFCookie(c)
+			c.JSON(http.StatusOK, common.OkData(nil))
+		})
 
 		auth := api.Group("/auth")
 		{

@@ -399,6 +399,9 @@ func (s *EmployeeService) CreateEmployee(ctx context.Context, req *dto.CreateEmp
 	}
 
 	if err := s.employeeRepo.InsertEmployee(ctx, emp); err != nil {
+		if isDuplicateKeyError(err) {
+			return nil, fmt.Errorf("手机号 %s 已被使用", req.Phone)
+		}
 		return nil, err
 	}
 
@@ -468,7 +471,13 @@ func (s *EmployeeService) UpdateEmployee(ctx context.Context, id int64, req *dto
 	// P1: 以下敏感字段不允许普通用户自行修改
 	// department, position, work_status, can_login 应由管理员接口修改
 
-	return s.employeeRepo.UpdateProfile(ctx, existing)
+	if err := s.employeeRepo.UpdateProfile(ctx, existing); err != nil {
+		if isDuplicateKeyError(err) {
+			return fmt.Errorf("手机号 %s 已被其他员工使用", req.Phone)
+		}
+		return err
+	}
+	return nil
 }
 
 // GetEmployeeByID 根据 ID 获取员工信息（不含密码，用于 /user/me）

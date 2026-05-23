@@ -545,8 +545,11 @@ func (h *EmployeeHandler) ChangePassword(c *gin.Context) {
 // ResetPassword 管理员重置员工密码
 // PUT /api/employee/:id/password
 func (h *EmployeeHandler) ResetPassword(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 8*time.Second)
+	defer cancel()
+
 	currentEmpID := middleware.GetEmployeeID(c)
-	if !h.EmployeeService.IsAdmin(c.Request.Context(), currentEmpID) {
+	if !h.EmployeeService.IsAdmin(ctx, currentEmpID) {
 		common.WriteJSON(c, http.StatusForbidden, common.Fail(403, "无权执行此操作"))
 		return
 	}
@@ -559,7 +562,7 @@ func (h *EmployeeHandler) ResetPassword(c *gin.Context) {
 	}
 
 	// 禁止重置 super_admin 的密码
-	targetEmp, err := h.EmployeeService.GetEmployeeByID(c.Request.Context(), empID)
+	targetEmp, err := h.EmployeeService.GetEmployeeByID(ctx, empID)
 	if err != nil || targetEmp == nil {
 		common.WriteJSON(c, http.StatusNotFound, common.Fail(404, "目标员工不存在"))
 		return
@@ -585,7 +588,7 @@ func (h *EmployeeHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 
-	if err := h.EmployeeService.ResetPassword(c.Request.Context(), empID, req.NewPassword); err != nil {
+	if err := h.EmployeeService.ResetPassword(ctx, empID, req.NewPassword); err != nil {
 		pkg.Logger.Error("ResetPassword failed", zap.Int64("id", empID), zap.Error(err))
 		common.WriteJSON(c, http.StatusInternalServerError, common.Fail(500, "密码重置失败"))
 		return

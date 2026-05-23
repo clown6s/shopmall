@@ -3,7 +3,6 @@ package middleware
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -12,16 +11,25 @@ const (
 	rateLimitPrefix    = "rate_limit:login:"
 	rateLimitMax       = 5
 	rateLimitWindowSec = 900 // 15 minutes
+
+	incrExpireScript = `
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+	redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return count
+`
 )
 
 // NewLoginRateLimiter 创建登录速率限制器实例
 func NewLoginRateLimiter(rdb *redis.Client) *LoginRateLimiter {
-	return &LoginRateLimiter{rdb: rdb}
+	return &LoginRateLimiter{rdb: rdb, incrExpireFn: redis.NewScript(incrExpireScript)}
 }
 
-// LoginRateLimiter 登录速率限制器（Redis INCR + EXPIRE 滑动窗口）
+// LoginRateLimiter 登录速率限制器（Redis INCR + EXPIRE 原子 Lua 脚本）
 type LoginRateLimiter struct {
-	rdb *redis.Client
+	rdb          *redis.Client
+	incrExpireFn *redis.Script
 }
 
 // AllowCheck 检查该手机号是否允许登录尝试（只读检查，不增加计数）。
@@ -56,12 +64,9 @@ func (l *LoginRateLimiter) RecordFail(ctx context.Context, key string) (int, int
 	}
 
 	redisKey := rateLimitPrefix + key
-	count, err := l.rdb.Incr(ctx, redisKey).Result()
+	count, err := l.incrExpireFn.Run(ctx, l.rdb, []string{redisKey}, rateLimitWindowSec).Int64()
 	if err != nil {
 		return 0, rateLimitMax, fmt.Errorf("redis incr failed: %w", err)
-	}
-	if count == 1 {
-		l.rdb.Expire(ctx, redisKey, time.Duration(rateLimitWindowSec)*time.Second)
 	}
 
 	failCount := int(count) - 1 // 本次是第 count 次尝试，之前失败了 count-1 次

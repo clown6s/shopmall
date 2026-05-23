@@ -60,6 +60,9 @@ func (s *PermissionService) CreatePermission(ctx context.Context, req *dto.Permi
 		Status:         1,
 	}
 	if err := s.repo.Create(ctx, perm); err != nil {
+		if isDuplicateKeyError(err) {
+			return nil, errors.New("权限标识已存在")
+		}
 		return nil, err
 	}
 	return perm, nil
@@ -105,7 +108,13 @@ func (s *PermissionService) UpdatePermission(ctx context.Context, id int64, req 
 	if req.Status != nil {
 		perm.Status = *req.Status
 	}
-	return s.repo.Update(ctx, perm)
+	if err := s.repo.Update(ctx, perm); err != nil {
+		if isDuplicateKeyError(err) {
+			return errors.New("权限标识已存在")
+		}
+		return err
+	}
+	return nil
 }
 
 // DeletePermission 删除权限（同时清理角色-权限关联）

@@ -66,6 +66,9 @@ func (s *RoleService) CreateRole(ctx context.Context, req *dto.RoleCreateReq) (*
 		Status:      1,
 	}
 	if err := s.repo.Create(ctx, role); err != nil {
+		if isDuplicateKeyError(err) {
+			return nil, errors.New("角色名称或标识已存在")
+		}
 		return nil, err
 	}
 	return role, nil
@@ -97,7 +100,13 @@ func (s *RoleService) UpdateRole(ctx context.Context, id int64, req *dto.RoleUpd
 	if req.Status != nil {
 		role.Status = *req.Status
 	}
-	return s.repo.Update(ctx, role)
+	if err := s.repo.Update(ctx, role); err != nil {
+		if isDuplicateKeyError(err) {
+			return errors.New("角色名称已存在")
+		}
+		return err
+	}
+	return nil
 }
 
 // DeleteRole 删除角色（事务性：同时删除角色-权限关联）
