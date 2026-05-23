@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 
 	"gopkg.in/yaml.v3"
@@ -198,6 +199,18 @@ func applyEnvOverrides(c *Config) {
 	}
 	if v := os.Getenv("REDIS_PASSWORD"); v != "" {
 		c.Redis.Password = v
+	}
+
+	// CORS
+	if v := os.Getenv("CORS_ALLOW_ORIGINS"); v != "" {
+		origins := strings.Split(v, ",")
+		c.CORS.AllowOrigins = c.CORS.AllowOrigins[:0]
+		for _, origin := range origins {
+			origin = strings.TrimSpace(origin)
+			if origin != "" {
+				c.CORS.AllowOrigins = append(c.CORS.AllowOrigins, origin)
+			}
+		}
 	}
 }
 
