@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"shopmall/common"
@@ -30,10 +31,20 @@ func NewProductHandler(svc *service.ProductService) *ProductHandler {
 // CategoryTree 获取分类级联树
 // GET /api/product/category
 func (h *ProductHandler) CategoryTree(c *gin.Context) {
-	gzipData := h.ProductService.CategoryTree()
+	gzipData, etag := h.ProductService.CategoryTree()
+
+	// 304 Not Modified
+	if clientETag := c.GetHeader("If-None-Match"); clientETag != "" && strings.Trim(clientETag, `"`) == strings.Trim(etag, `"`) {
+		c.Header("ETag", etag)
+		c.Header("Cache-Control", "no-cache")
+		c.Status(http.StatusNotModified)
+		return
+	}
 
 	c.Header("Content-Encoding", "gzip")
 	c.Header("Content-Type", "application/json; charset=utf-8")
+	c.Header("ETag", etag)
+	c.Header("Cache-Control", "no-cache")
 	c.Status(http.StatusOK)
 	c.Writer.Write(gzipData)
 }

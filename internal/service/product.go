@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/md5"
 	"encoding/json"
+	"fmt"
 	"shopmall/internal/dto"
 	"shopmall/internal/model"
 	"shopmall/internal/repository"
@@ -17,6 +19,7 @@ import (
 type ProductService struct {
 	productRepo    *repository.ProductRepo
 	categoryGzip   atomic.Value // []byte
+	categoryETag   atomic.Value // string
 	refreshMu      sync.Mutex
 	refreshTimer   *time.Timer
 	refreshPending atomic.Bool
@@ -27,7 +30,9 @@ var jsonPrefix = []byte(`{"code":200,"message":"success","data":`)
 
 func NewProductSvc(repo *repository.ProductRepo) *ProductService {
 	s := &ProductService{productRepo: repo}
-	s.categoryGzip.Store(defaultGzipData())
+	data := defaultGzipData()
+	s.categoryGzip.Store(data)
+	s.categoryETag.Store(fmt.Sprintf(`W/"%x"`, md5.Sum(data)))
 	return s
 }
 
@@ -79,12 +84,13 @@ func (s *ProductService) InitCategoryCache(ctx context.Context) error {
 	}
 
 	s.categoryGzip.Store(buf.Bytes())
+	s.categoryETag.Store(fmt.Sprintf(`W/"%x"`, md5.Sum(buf.Bytes())))
 	return nil
 }
 
 // CategoryTree 查询分类树（gzip缓存）
-func (s *ProductService) CategoryTree() []byte {
-	return s.categoryGzip.Load().([]byte)
+func (s *ProductService) CategoryTree() (data []byte, etag string) {
+	return s.categoryGzip.Load().([]byte), s.categoryETag.Load().(string)
 }
 
 // AddCategory 添加分类
