@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"sync"
 
 	"gopkg.in/yaml.v3"
@@ -20,8 +21,16 @@ type Config struct {
 }
 
 type AppConfig struct {
-	Port string `yaml:"port"`
-	Mode string `yaml:"mode"` // dev | prod | test
+	Port      string    `yaml:"port"`
+	Mode      string    `yaml:"mode"`       // dev | prod | test
+	JWTSecret string    `yaml:"jwt_secret"` // JWT 签名密钥，prod 必填，至少32字符
+	JWT       JWTConfig `yaml:"jwt"`
+}
+
+// JWTConfig JWT 相关配置
+type JWTConfig struct {
+	ExpireHours        int `yaml:"expire_hours"`         // access token 有效期（小时），默认 2
+	RefreshExpireHours int `yaml:"refresh_expire_hours"` // refresh token 有效期（小时），默认 168（7天）
 }
 
 type DBConfig struct {
@@ -57,24 +66,31 @@ type CORSConfig struct {
 	MaxAge           int      `yaml:"max_age"`
 }
 
-// Load reads config from YAML file, uses defaults for missing fields
+// Load reads config from YAML file, uses defaults for missing fields.
+// 环境变量可覆盖 YAML 值（用于 docker-compose 部署）。
+// 优先级：环境变量 > config.yaml > 默认值
 func Load(path string) *Config {
 	once.Do(func() {
 		Cfg = &Config{}
 
-		// set defaults
+		// 1. set defaults
 		setDefaults(Cfg)
 
-		// read YAML file
+		// 2. read YAML file
 		data, err := os.ReadFile(path)
 		if err != nil {
 			log.Printf("[Config] warning: cannot read %s: %v, using defaults", path, err)
-			return
+		} else {
+			if err := yaml.Unmarshal(data, Cfg); err != nil {
+				log.Fatalf("[Config] failed to parse %s: %v", path, err)
+			}
 		}
 
-		if err := yaml.Unmarshal(data, Cfg); err != nil {
-			log.Fatalf("[Config] failed to parse %s: %v", path, err)
-		}
+		// 3. YAML 空值回填默认值
+		fillEmptyDefaults(Cfg)
+
+		// 4. 环境变量覆盖（docker-compose 友好）
+		applyEnvOverrides(Cfg)
 	})
 	return Cfg
 }
@@ -82,6 +98,9 @@ func Load(path string) *Config {
 func setDefaults(c *Config) {
 	c.App.Port = "7000"
 	c.App.Mode = "dev"
+	c.App.JWTSecret = "shopmall-dev-jwt-secret-key-2026!@#$%^&*"
+	c.App.JWT.ExpireHours = 2
+	c.App.JWT.RefreshExpireHours = 168
 
 	c.DB.Host = "127.0.0.1"
 	c.DB.Port = 3306
@@ -101,6 +120,85 @@ func setDefaults(c *Config) {
 	c.CORS.AllowHeaders = []string{"Origin", "Content-Type", "Authorization", "X-XSRF-TOKEN"}
 	c.CORS.AllowCredentials = true
 	c.CORS.MaxAge = 86400
+}
+
+// fillEmptyDefaults yaml.Unmarshal 会用零值覆盖 setDefaults，这里补回
+func fillEmptyDefaults(c *Config) {
+	if c.App.JWTSecret == "" {
+		c.App.JWTSecret = "shopmall-dev-jwt-secret-key-2026!@#$%^&*"
+	}
+	if c.App.JWT.ExpireHours <= 0 {
+		c.App.JWT.ExpireHours = 2
+	}
+	if c.App.JWT.RefreshExpireHours <= 0 {
+		c.App.JWT.RefreshExpireHours = 168
+	}
+}
+
+// applyEnvOverrides 环境变量覆盖 YAML 配置（docker-compose 部署场景）
+//
+// 支持的环境变量：
+//
+//	APP_PORT              - 服务端口
+//	APP_MODE              - 运行模式 (dev/prod/test)
+//	APP_JWT_SECRET        - JWT 签名密钥
+//	APP_JWT_EXPIRE_HOURS  - access token 有效期（小时）
+//	APP_JWT_REFRESH_EXPIRE_HOURS - refresh token 有效期（小时）
+//	DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME - 数据库
+//	REDIS_HOST, REDIS_PORT, REDIS_PASSWORD - Redis
+func applyEnvOverrides(c *Config) {
+	// App
+	if v := os.Getenv("APP_PORT"); v != "" {
+		c.App.Port = v
+	}
+	if v := os.Getenv("APP_MODE"); v != "" {
+		c.App.Mode = v
+	}
+	if v := os.Getenv("APP_JWT_SECRET"); v != "" {
+		c.App.JWTSecret = v
+	}
+	if v := os.Getenv("APP_JWT_EXPIRE_HOURS"); v != "" {
+		if h, err := strconv.Atoi(v); err == nil && h > 0 {
+			c.App.JWT.ExpireHours = h
+		}
+	}
+	if v := os.Getenv("APP_JWT_REFRESH_EXPIRE_HOURS"); v != "" {
+		if h, err := strconv.Atoi(v); err == nil && h > 0 {
+			c.App.JWT.RefreshExpireHours = h
+		}
+	}
+
+	// DB
+	if v := os.Getenv("DB_HOST"); v != "" {
+		c.DB.Host = v
+	}
+	if v := os.Getenv("DB_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil && p > 0 {
+			c.DB.Port = p
+		}
+	}
+	if v := os.Getenv("DB_USER"); v != "" {
+		c.DB.User = v
+	}
+	if v := os.Getenv("DB_PASSWORD"); v != "" {
+		c.DB.Password = v
+	}
+	if v := os.Getenv("DB_NAME"); v != "" {
+		c.DB.DBName = v
+	}
+
+	// Redis
+	if v := os.Getenv("REDIS_HOST"); v != "" {
+		c.Redis.Host = v
+	}
+	if v := os.Getenv("REDIS_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil && p > 0 {
+			c.Redis.Port = p
+		}
+	}
+	if v := os.Getenv("REDIS_PASSWORD"); v != "" {
+		c.Redis.Password = v
+	}
 }
 
 func (c *Config) Validate() error {
@@ -127,6 +225,15 @@ func (c *Config) Validate() error {
 	}
 	if c.App.Mode == "prod" && c.Redis.Password == "" {
 		return fmt.Errorf("redis.password required in production mode")
+	}
+	if c.App.Mode == "prod" && len(c.App.JWTSecret) < 32 {
+		return fmt.Errorf("app.jwt_secret must be at least 32 characters in production mode")
+	}
+	if c.App.JWT.ExpireHours <= 0 {
+		return fmt.Errorf("app.jwt.expire_hours must be positive")
+	}
+	if c.App.JWT.RefreshExpireHours <= 0 {
+		return fmt.Errorf("app.jwt.refresh_expire_hours must be positive")
 	}
 	return nil
 }

@@ -7,21 +7,42 @@ import (
 	"database/sql"
 
 	"shopmall/cache"
+	"shopmall/common/middleware"
 	"shopmall/db"
 	"shopmall/internal/config"
+	"shopmall/internal/handler"
+	"shopmall/internal/repository"
+	"shopmall/internal/service"
 
 	"github.com/redis/go-redis/v9"
 )
 
 // App application dependency container
 type App struct {
-	DB    *sql.DB
-	Redis *redis.Client
-	Cfg   *config.Config
+	DB              *sql.DB
+	Redis           *redis.Client
+	Cfg             *config.Config
+	EmployeeHandler *handler.EmployeeHandler
+	DeptHandler     *handler.DepartmentHandler
+	ProductHandler  *handler.ProductHandler
 }
 
-func newApp(db *sql.DB, rdb *redis.Client, cfg *config.Config) *App {
-	return &App{DB: db, Redis: rdb, Cfg: cfg}
+func newApp(
+	db *sql.DB,
+	rdb *redis.Client,
+	cfg *config.Config,
+	empHandler *handler.EmployeeHandler,
+	deptHandler *handler.DepartmentHandler,
+	prodHandler *handler.ProductHandler,
+) *App {
+	return &App{
+		DB:              db,
+		Redis:           rdb,
+		Cfg:             cfg,
+		EmployeeHandler: empHandler,
+		DeptHandler:     deptHandler,
+		ProductHandler:  prodHandler,
+	}
 }
 
 func InitializeApp(cfg *config.Config) (*App, error) {
@@ -35,5 +56,20 @@ func InitializeApp(cfg *config.Config) (*App, error) {
 		return nil, err
 	}
 
-	return newApp(dbConn, redisClient, cfg), nil
+	employeeRepo := repository.NewEmployeeRepo(dbConn)
+	departmentRepo := repository.NewDepartmentRepo(dbConn)
+	productRepo := repository.NewProductRepo(dbConn)
+
+	employeeService := service.NewEmployeeSvc(employeeRepo, redisClient)
+	roleService := service.NewRoleSvc()
+	departmentService := service.NewDepartmentSvc(departmentRepo)
+	productService := service.NewProductSvc(productRepo)
+
+	loginRateLimiter := middleware.NewLoginRateLimiter()
+
+	employeeHandler := handler.NewEmployeeHandler(employeeService, roleService, loginRateLimiter, redisClient)
+	departmentHandler := handler.NewDepartmentHandler(departmentService)
+	productHandler := handler.NewProductHandler(productService)
+
+	return newApp(dbConn, redisClient, cfg, employeeHandler, departmentHandler, productHandler), nil
 }

@@ -60,6 +60,12 @@ func main() {
 		defer app.Redis.Close()
 	}
 
+	// 4.5 Init category cache
+	if err := app.ProductHandler.ProductService.InitCategoryCache(context.Background()); err != nil {
+		pkg.Logger.Warn("init category cache failed", zap.Error(err))
+	}
+	defer app.ProductHandler.ProductService.Close()
+
 	// 5. Create Gin engine
 	r := gin.New()
 
@@ -73,7 +79,7 @@ func main() {
 
 	// 7. Register routes
 	hc := &routes.HealthChecker{DB: app.DB, Redis: app.Redis}
-	routes.RegisterRoutes(r, hc)
+	routes.RegisterRoutes(r, hc, app.EmployeeHandler, app.DeptHandler, app.ProductHandler)
 
 	// 8. Start HTTP server
 	addr := cfg.App.Port

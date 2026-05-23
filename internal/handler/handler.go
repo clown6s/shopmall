@@ -2,14 +2,16 @@ package handler
 
 // Handler unified handler container
 type Handler struct {
-	// Product    *ProductHandler
-	// Employee   *EmployeeHandler
-	// Department *DepartmentHandler
-	// Role       *RoleHandler
-	// Permission *PermissionHandler
+	Employee   *EmployeeHandler
+	Department *DepartmentHandler
+	Product    *ProductHandler
 }
 
 // NewHandler creates Handler container
-func NewHandler() *Handler {
-	return &Handler{}
+func NewHandler(emp *EmployeeHandler, dept *DepartmentHandler, prod *ProductHandler) *Handler {
+	return &Handler{
+		Employee:   emp,
+		Department: dept,
+		Product:    prod,
+	}
 }
