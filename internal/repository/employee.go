@@ -131,11 +131,11 @@ func (r *EmployeeRepo) ListEmployee(ctx context.Context, realName, phone string,
 
 	if realName != "" {
 		conditions = append(conditions, "real_name LIKE ?")
-		args = append(args, "%"+realName+"%")
+		args = append(args, "%"+escapeLike(realName)+"%")
 	}
 	if phone != "" {
 		conditions = append(conditions, "phone LIKE ?")
-		args = append(args, "%"+phone+"%")
+		args = append(args, "%"+escapeLike(phone)+"%")
 	}
 
 	where := "WHERE deleted_at IS NULL"

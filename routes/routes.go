@@ -19,7 +19,7 @@ type HealthChecker struct {
 }
 
 // RegisterRoutes registers all routes
-func RegisterRoutes(r *gin.Engine, hc *HealthChecker, empRepo *repository.EmployeeRepo, empHandler *handler.EmployeeHandler, deptHandler *handler.DepartmentHandler, prodHandler *handler.ProductHandler, roleHandler *handler.RoleHandler, permHandler *handler.PermissionHandler) {
+func RegisterRoutes(r *gin.Engine, hc *HealthChecker, empRepo *repository.EmployeeRepo, roleRepo *repository.RoleRepo, permRepo *repository.PermissionRepo, empHandler *handler.EmployeeHandler, deptHandler *handler.DepartmentHandler, prodHandler *handler.ProductHandler, roleHandler *handler.RoleHandler, permHandler *handler.PermissionHandler) {
 	// 健康检查
 	r.GET("/health", func(c *gin.Context) {
 		if hc != nil && hc.DB != nil {
@@ -37,7 +37,11 @@ func RegisterRoutes(r *gin.Engine, hc *HealthChecker, empRepo *repository.Employ
 		c.JSON(http.StatusOK, common.OkData(nil))
 	})
 
-	requireAdmin := middleware.RequireAdmin(empRepo)
+	// ── 权限中间件工厂 ──
+	// perm 创建一个闭包，传入所需的权限 key 即可
+	perm := func(keys ...string) gin.HandlerFunc {
+		return middleware.RequirePermission(empRepo, roleRepo, permRepo, keys...)
+	}
 
 	// API 路由组
 	api := r.Group("/api")
@@ -55,16 +59,7 @@ func RegisterRoutes(r *gin.Engine, hc *HealthChecker, empRepo *repository.Employ
 		authed := api.Group("")
 		authed.Use(middleware.AuthMiddleware())
 		{
-			// 员工管理
-			emp := authed.Group("/employee")
-			{
-				emp.GET("/list", empHandler.List)
-				emp.POST("", empHandler.Create)
-				emp.PUT("/:id", empHandler.Update)
-				emp.PUT("/:id/password", empHandler.ResetPassword)
-			}
-
-			// 当前用户
+			// ── 当前用户（白名单，不需要额外权限） ──
 			user := authed.Group("/user")
 			{
 				user.GET("/me", empHandler.GetCurrentUser)
@@ -72,55 +67,59 @@ func RegisterRoutes(r *gin.Engine, hc *HealthChecker, empRepo *repository.Employ
 				user.PUT("/password", empHandler.ChangePassword)
 			}
 
-			// 部门管理
+			// ── 员工管理 ──
+			emp := authed.Group("/employee")
+			{
+				emp.GET("/list", perm("system:employee:list"), empHandler.List)
+				emp.POST("", perm("system:employee:add"), empHandler.Create)
+				emp.PUT("/:id", perm("system:employee:update"), empHandler.Update)
+				emp.PUT("/:id/password", perm("system:employee:reset_pwd"), empHandler.ResetPassword)
+			}
+
+			// ── 部门管理 ──
 			dept := authed.Group("/department")
 			{
-				dept.GET("", deptHandler.GetAll)
-				dept.GET("/all", deptHandler.GetAllSimple)
-				dept.GET("/:deptId", deptHandler.GetByID)
-				dept.POST("", deptHandler.Create)
-				dept.PUT("/:deptId", deptHandler.Update)
-				dept.DELETE("/:deptId", deptHandler.Delete)
+				dept.GET("", perm("system:department:list"), deptHandler.GetAll)
+				dept.GET("/all", perm("system:department:list"), deptHandler.GetAllSimple)
+				dept.GET("/:deptId", perm("system:department:list"), deptHandler.GetByID)
+				dept.POST("", perm("system:department:add"), deptHandler.Create)
+				dept.PUT("/:deptId", perm("system:department:update"), deptHandler.Update)
+				dept.DELETE("/:deptId", perm("system:department:delete"), deptHandler.Delete)
 			}
 
-			// 商品（分类 + 品牌）
+			// ── 商品（分类 + 品牌） ──
 			product := authed.Group("/product")
 			{
-				product.GET("/category", prodHandler.CategoryTree)
-				product.POST("/category", prodHandler.CategoryAdd)
-				product.PUT("/category", prodHandler.CategoryEdit)
-				product.DELETE("/category/:catId", prodHandler.CategoryDelete)
-				product.GET("/brands", prodHandler.GetBrands)
-				product.POST("/brand", prodHandler.AddBrand)
-				product.PUT("/brand/:brandId", prodHandler.UpdateBrand)
-				product.DELETE("/brand/:brandId", prodHandler.DeleteBrand)
+				product.GET("/category", perm("product:category:list"), prodHandler.CategoryTree)
+				product.POST("/category", perm("product:category:add"), prodHandler.CategoryAdd)
+				product.PUT("/category", perm("product:category:update"), prodHandler.CategoryEdit)
+				product.DELETE("/category/:catId", perm("product:category:delete"), prodHandler.CategoryDelete)
+				product.GET("/brands", perm("product:brand:list"), prodHandler.GetBrands)
+				product.POST("/brand", perm("product:brand:add"), prodHandler.AddBrand)
+				product.PUT("/brand/:brandId", perm("product:brand:update"), prodHandler.UpdateBrand)
+				product.DELETE("/brand/:brandId", perm("product:brand:delete"), prodHandler.DeleteBrand)
 			}
 
-			// ── 管理员专用路由 ──
-			admin := authed.Group("")
-			admin.Use(requireAdmin)
+			// ── 角色管理 ──
+			role := authed.Group("/admin/role")
 			{
-				// 角色管理
-				role := admin.Group("/admin/role")
-				{
-					role.GET("", roleHandler.List)
-					role.GET("/:id", roleHandler.GetByID)
-					role.POST("", roleHandler.Create)
-					role.PUT("/:id", roleHandler.Update)
-					role.DELETE("/:id", roleHandler.Delete)
-					role.GET("/:id/permissions", roleHandler.GetPermissionIDs)
-					role.PUT("/:id/permissions", roleHandler.AssignPermissions)
-				}
+				role.GET("", perm("system:role:list"), roleHandler.List)
+				role.GET("/:id", perm("system:role:list"), roleHandler.GetByID)
+				role.POST("", perm("system:role:add"), roleHandler.Create)
+				role.PUT("/:id", perm("system:role:update"), roleHandler.Update)
+				role.DELETE("/:id", perm("system:role:delete"), roleHandler.Delete)
+				role.GET("/:id/permissions", perm("system:role:list"), roleHandler.GetPermissionIDs)
+				role.PUT("/:id/permissions", perm("system:role:assign_perm"), roleHandler.AssignPermissions)
+			}
 
-				// 权限管理
-				perm := admin.Group("/admin/permission")
-				{
-					perm.GET("", permHandler.List)
-					perm.GET("/:id", permHandler.GetByID)
-					perm.POST("", permHandler.Create)
-					perm.PUT("/:id", permHandler.Update)
-					perm.DELETE("/:id", permHandler.Delete)
-				}
+			// ── 权限管理 ──
+			prm := authed.Group("/admin/permission")
+			{
+				prm.GET("", perm("system:permission:list"), permHandler.List)
+				prm.GET("/:id", perm("system:permission:list"), permHandler.GetByID)
+				prm.POST("", perm("system:permission:add"), permHandler.Create)
+				prm.PUT("/:id", perm("system:permission:update"), permHandler.Update)
+				prm.DELETE("/:id", perm("system:permission:delete"), permHandler.Delete)
 			}
 		}
 	}

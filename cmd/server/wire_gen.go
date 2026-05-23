@@ -22,35 +22,41 @@ type App struct {
 	DB              *sql.DB
 	Redis           *redis.Client
 	Cfg             *config.Config
+	EmployeeRepo    *repository.EmployeeRepo
+	RoleRepo        *repository.RoleRepo
+	PermRepo        *repository.PermissionRepo
 	EmployeeHandler *handler.EmployeeHandler
 	DeptHandler     *handler.DepartmentHandler
 	ProductHandler  *handler.ProductHandler
 	RoleHandler     *handler.RoleHandler
 	PermHandler     *handler.PermissionHandler
-	EmployeeRepo    *repository.EmployeeRepo
 }
 
 func newApp(
 	db *sql.DB,
 	rdb *redis.Client,
 	cfg *config.Config,
+	empRepo *repository.EmployeeRepo,
+	roleRepo *repository.RoleRepo,
+	permRepo *repository.PermissionRepo,
 	empHandler *handler.EmployeeHandler,
 	deptHandler *handler.DepartmentHandler,
 	prodHandler *handler.ProductHandler,
 	roleHandler *handler.RoleHandler,
 	permHandler *handler.PermissionHandler,
-	empRepo *repository.EmployeeRepo,
 ) *App {
 	return &App{
 		DB:              db,
 		Redis:           rdb,
 		Cfg:             cfg,
+		EmployeeRepo:    empRepo,
+		RoleRepo:        roleRepo,
+		PermRepo:        permRepo,
 		EmployeeHandler: empHandler,
 		DeptHandler:     deptHandler,
 		ProductHandler:  prodHandler,
 		RoleHandler:     roleHandler,
 		PermHandler:     permHandler,
-		EmployeeRepo:    empRepo,
 	}
 }
 
@@ -85,5 +91,5 @@ func InitializeApp(cfg *config.Config) (*App, error) {
 	roleHandler := handler.NewRoleHandler(roleService)
 	permissionHandler := handler.NewPermissionHandler(permissionService)
 
-	return newApp(dbConn, redisClient, cfg, employeeHandler, departmentHandler, productHandler, roleHandler, permissionHandler, employeeRepo), nil
+	return newApp(dbConn, redisClient, cfg, employeeRepo, roleRepo, permissionRepo, employeeHandler, departmentHandler, productHandler, roleHandler, permissionHandler), nil
 }
