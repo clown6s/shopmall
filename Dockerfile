@@ -26,6 +26,7 @@ USER nobody
 
 WORKDIR /app
 COPY --from=builder /shopmall .
+COPY --from=builder /build/config.yaml .
 
 ENV TZ=Asia/Shanghai
 
