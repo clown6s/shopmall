@@ -1,27 +1,16 @@
-# ===========================================
-# ShopMall 配置文件
-# ===========================================
-#
-# 所有配置均可通过环境变量覆盖（docker-compose 友好）：
-#   APP_PORT / APP_MODE / APP_JWT_SECRET
-#   APP_JWT_EXPIRE_HOURS / APP_JWT_REFRESH_EXPIRE_HOURS
-#   DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME
-#   REDIS_HOST / REDIS_PORT / REDIS_PASSWORD
-# ===========================================
-
 app:
   port: "7000"
   mode: dev           # dev | prod | test
-  jwt_secret: "shopmall-dev-jwt-secret-key-2026!@#$%^&*"  # prod 环境必须修改，至少32字符
+  jwt_secret: ""      # 见 .env (APP_JWT_SECRET)，prod 环境必须至少32字符
   jwt:
     expire_hours: 2              # access token 有效期（小时）
     refresh_expire_hours: 168    # refresh token 有效期（小时），168 = 7天
 
 db:
-  host: 10.211.55.5
+  host: 47.108.233.21
   port: 3306
-  user: root
-  password: admin@zzp
+  user: ""        # 见 .env (DB_USER)
+  password: ""    # 见 .env (DB_PASSWORD)
   dbname: shop_mall
   max_open_conns: 50
   max_idle_conns: 25
@@ -30,9 +19,9 @@ db:
   tls: ""                   # "" | skip-verify | custom
 
 redis:
-  host: 10.211.55.5
+  host: 47.108.233.21
   port: 6379
-  password: admin@zzp
+  password: ""    # 见 .env (REDIS_PASSWORD)
   db: 0
   tls: false
 

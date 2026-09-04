@@ -18,13 +18,20 @@ import (
 	"shopmall/routes"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"go.uber.org/zap"
 )
 
 func main() {
 	// 1. Load config
 	cfgPath := flag.String("config", "config.yaml", "config file path")
+	envPath := flag.String("env", ".env", "dotenv file path")
 	flag.Parse()
+
+	// 0. Load .env (环境变量覆盖 config.yaml；.env 不存在时忽略)
+	if err := godotenv.Load(*envPath); err != nil {
+		log.Printf("[Config] warning: no dotenv file %s: %v", *envPath, err)
+	}
 
 	cfg := config.Load(*cfgPath)
 	if err := cfg.Validate(); err != nil {
